@@ -1,0 +1,833 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>FJÄLL GROUP — Drop Pod Villas · Interactive Presentation</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --ink:#0c0f0e;
+    --bone:#f2f5f1;
+    --bone-dim:rgba(242,245,241,.55);
+    --teal:#35c9a8;
+    --hairline:rgba(242,245,241,.16);
+    --ease-ui:cubic-bezier(0,.25,.25,1);
+    --ease-fade:cubic-bezier(.6,0,.2,1);
+    --look-scale:1.32;
+  }
+  *{margin:0;padding:0;box-sizing:border-box}
+  html,body{height:100%;background:var(--ink);overflow:hidden}
+  body{
+    font-family:'Inter',-apple-system,'Segoe UI',sans-serif;
+    color:var(--bone);
+    -webkit-font-smoothing:antialiased;
+    user-select:none;-webkit-user-select:none;
+  }
+
+  /* ---------- stage ---------- */
+  #stage{position:fixed;inset:0;background:var(--ink)}
+  body.explore #stage{cursor:grab}
+  body.explore #stage.dragging{cursor:grabbing}
+  .scene{
+    position:absolute;inset:0;
+    opacity:0;visibility:hidden;
+    transition:opacity 1.3s var(--ease-fade), visibility 0s linear 1.3s;
+  }
+  .scene.active{opacity:1;visibility:visible;transition:opacity 1.3s var(--ease-fade)}
+  .look{position:absolute;inset:0;will-change:transform}
+  .scene img,.scene video{
+    position:absolute;inset:-4%;width:108%;height:108%;object-fit:cover;
+    opacity:0;transition:opacity 1s var(--ease-fade);
+  }
+  .scene img.show,.scene video.show{opacity:1}
+  .scene canvas.pano{position:absolute;inset:0;width:100%;height:100%;
+    transition:opacity .7s var(--ease-fade);touch-action:none}
+  body.film .scene.active img.show.kb-a{animation:kba var(--dur) linear forwards}
+  body.film .scene.active img.show.kb-b{animation:kbb var(--dur) linear forwards}
+  body.film .scene.active img.show.kb-c{animation:kbc var(--dur) linear forwards}
+  @keyframes kba{from{transform:scale(1) translate(0,0)}to{transform:scale(1.09) translate(-1.2%,-.8%)}}
+  @keyframes kbb{from{transform:scale(1.09) translate(1.1%,.7%)}to{transform:scale(1) translate(0,0)}}
+  @keyframes kbc{from{transform:scale(1) translate(.9%,0)}to{transform:scale(1.08) translate(-.9%,.6%)}}
+
+  .veil{position:fixed;inset:0;pointer-events:none;z-index:5;
+    background:linear-gradient(to top,rgba(8,10,9,.55),transparent 30%),
+               linear-gradient(to bottom,rgba(8,10,9,.45),transparent 26%);}
+  .vignette{position:fixed;inset:0;pointer-events:none;z-index:6;
+    box-shadow:inset 0 0 16vmax rgba(5,6,6,.42);transition:box-shadow .8s var(--ease-ui)}
+  body.explore .vignette{box-shadow:inset 0 0 24vmax rgba(4,5,5,.62)}
+
+  /* ---------- VR HUD ---------- */
+  .hud{position:fixed;inset:0;pointer-events:none;z-index:15;
+    opacity:0;transition:opacity .6s var(--ease-ui)}
+  body.explore .hud{opacity:1}
+  .reticle{position:absolute;left:50%;top:50%;width:46px;height:46px;
+    transform:translate(-50%,-50%);border:1px solid rgba(242,245,241,.35);border-radius:50%}
+  .reticle::before,.reticle::after{content:"";position:absolute;background:rgba(242,245,241,.5)}
+  .reticle::before{left:50%;top:-7px;width:1px;height:8px}
+  .reticle::after{left:50%;bottom:-7px;width:1px;height:8px;transform:translateX(-.5px)}
+  .reticle i{position:absolute;left:50%;top:50%;width:3px;height:3px;border-radius:50%;
+    background:var(--teal);transform:translate(-50%,-50%)}
+  .compass{position:absolute;top:74px;left:50%;transform:translateX(-50%);
+    width:min(420px,60vw);height:30px;overflow:hidden;
+    -webkit-mask-image:linear-gradient(90deg,transparent,#000 20%,#000 80%,transparent);
+    mask-image:linear-gradient(90deg,transparent,#000 20%,#000 80%,transparent)}
+  .compass .tape{position:absolute;top:0;left:50%;height:100%;white-space:nowrap;
+    font-size:9px;letter-spacing:.18em;color:var(--bone-dim);will-change:transform}
+  .compass .tape span{display:inline-block;width:40px;text-align:center;padding-top:2px}
+  .compass .tape span.card{color:var(--bone);font-weight:600}
+  .compass .needle{position:absolute;left:50%;top:0;width:1px;height:9px;background:var(--teal)}
+  .coords{position:absolute;left:clamp(22px,3.4vw,52px);top:50%;transform:translateY(-50%);
+    font-size:9px;letter-spacing:.3em;color:var(--bone-dim);writing-mode:vertical-rl;line-height:2}
+  .coords b{color:var(--teal);font-weight:600}
+  .look-hint{position:absolute;bottom:110px;left:50%;transform:translateX(-50%);
+    font-size:9px;letter-spacing:.34em;text-transform:uppercase;color:var(--bone-dim);
+    animation:pulse 2.6s ease-in-out infinite}
+  @keyframes pulse{0%,100%{opacity:.35}50%{opacity:.9}}
+  .badge360{position:fixed;top:clamp(66px,9vh,84px);right:clamp(22px,3.4vw,52px);z-index:16;
+    font-size:9px;font-weight:700;letter-spacing:.3em;color:var(--teal);
+    border:1px solid var(--teal);border-radius:999px;padding:8px 16px;
+    opacity:0;transition:opacity .5s var(--ease-ui);pointer-events:none}
+  .badge360.show{opacity:1}
+
+  /* ---------- chrome ---------- */
+  .chrome{position:fixed;z-index:20;transition:opacity .5s var(--ease-ui)}
+  .hidden-chrome .chrome{opacity:0;pointer-events:none}
+
+  header{top:0;left:0;right:0;display:flex;align-items:center;justify-content:space-between;
+    padding:clamp(16px,2.6vh,28px) clamp(22px,3.4vw,52px)}
+  .brand{display:flex;align-items:center;gap:16px}
+  .brand img{height:26px;width:auto;display:block}
+  .brand .div{width:1px;height:22px;background:var(--hairline)}
+  .brand .sub{font-size:9px;letter-spacing:.32em;text-transform:uppercase;color:var(--bone-dim)}
+  .meta{text-align:right;font-size:9px;letter-spacing:.28em;text-transform:uppercase;color:var(--bone-dim);line-height:1.9}
+  .meta b{color:var(--bone);font-weight:600}
+
+  #caption{left:clamp(22px,3.4vw,52px);bottom:clamp(84px,13vh,128px);max-width:62vw}
+  #caption .no{font-size:10px;letter-spacing:.34em;font-weight:600;color:var(--teal);margin-bottom:12px}
+  #caption .title{font-size:clamp(28px,4.2vw,56px);font-weight:800;line-height:.98;
+    letter-spacing:-.035em;text-transform:uppercase}
+  #caption .desc{margin-top:12px;font-size:12px;font-weight:300;letter-spacing:.04em;
+    color:var(--bone-dim);max-width:46ch;line-height:1.7}
+  .cap-anim{animation:capin .9s var(--ease-ui) both}
+  @keyframes capin{from{opacity:0;filter:blur(14px);transform:translateY(26px)}to{opacity:1;filter:blur(0);transform:translateY(0)}}
+
+  footer{left:0;right:0;bottom:0;display:flex;align-items:flex-end;justify-content:space-between;
+    gap:22px;padding:0 clamp(22px,3.4vw,52px) clamp(16px,2.8vh,28px)}
+
+  .transport{display:flex;align-items:center;gap:6px}
+  .tbtn{
+    width:42px;height:42px;border:1px solid var(--hairline);border-radius:50%;
+    background:rgba(12,15,14,.35);backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);
+    color:var(--bone);display:grid;place-items:center;cursor:pointer;
+    transition:border-color .3s var(--ease-ui),background .3s var(--ease-ui),transform .3s var(--ease-ui);
+  }
+  .tbtn:hover{border-color:var(--bone);background:rgba(242,245,241,.08)}
+  .tbtn:active{transform:scale(.94)}
+  .tbtn svg{width:14px;height:14px;fill:none;stroke:currentColor;stroke-width:1.5;stroke-linecap:round;stroke-linejoin:round}
+  .tbtn svg .fill{fill:currentColor;stroke:none}
+
+  #segments{display:flex;gap:5px;flex:1;max-width:620px;align-items:center}
+  .seg{position:relative;flex:1;height:22px;cursor:pointer;display:flex;align-items:center;background:none;border:none;padding:0}
+  .seg::before{content:"";display:block;width:100%;height:1px;background:var(--hairline)}
+  .seg .fill{position:absolute;left:0;top:50%;height:1px;width:0;background:var(--bone);transform:translateY(-.5px)}
+  .seg.done .fill{width:100%;background:var(--bone-dim)}
+  .seg:hover::before{background:var(--bone-dim)}
+  .seg .tip{position:absolute;bottom:16px;left:50%;transform:translateX(-50%) translateY(4px);
+    font-size:8px;letter-spacing:.22em;text-transform:uppercase;color:var(--bone);
+    white-space:nowrap;opacity:0;transition:all .25s var(--ease-ui);pointer-events:none}
+  .seg:hover .tip{opacity:.9;transform:translateX(-50%) translateY(0)}
+
+  .ctrl-col{display:flex;flex-direction:column;gap:8px;align-items:flex-end}
+  .switch{
+    display:flex;border:1px solid var(--hairline);border-radius:999px;overflow:hidden;
+    background:rgba(12,15,14,.4);backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);
+  }
+  .switch button{
+    appearance:none;border:none;background:transparent;color:var(--bone-dim);
+    font-family:inherit;font-size:9px;font-weight:600;letter-spacing:.24em;text-transform:uppercase;
+    padding:12px 20px;cursor:pointer;
+    transition:color .35s var(--ease-ui),background .35s var(--ease-ui);
+  }
+  .switch button.on{color:#0c0f0e;background:var(--bone)}
+  .switch button:not(.on):hover{color:var(--bone)}
+  .switch.mode button.on{background:var(--teal)}
+  .switch-label{text-align:right;font-size:8px;letter-spacing:.3em;text-transform:uppercase;color:var(--bone-dim)}
+  .switch-label em{font-style:normal;color:var(--teal)}
+
+  #counter{position:fixed;right:clamp(22px,3.4vw,52px);bottom:clamp(84px,13vh,128px);
+    font-size:10px;letter-spacing:.3em;color:var(--bone-dim);text-align:right}
+  #counter .cur{font-size:44px;font-weight:800;letter-spacing:-.03em;color:var(--bone);display:block;line-height:1}
+
+  /* ---------- intro ---------- */
+  #intro{position:fixed;inset:0;z-index:50;background:var(--ink);
+    display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;
+    transition:opacity 1.2s var(--ease-fade),visibility 0s linear 1.2s;padding:24px}
+  #intro.gone{opacity:0;visibility:hidden}
+  #intro>*{position:relative;z-index:1}
+  #intro video.bg{position:absolute;inset:0;z-index:0;width:100%;height:100%;object-fit:cover;opacity:.6}
+  #intro .scrim{position:absolute;inset:0;z-index:0;
+    background:radial-gradient(ellipse at center,rgba(12,15,14,.42) 0%,rgba(12,15,14,.82) 100%),
+               linear-gradient(to top,rgba(12,15,14,.6),transparent 40%)}
+  #intro img.logo{height:clamp(44px,7vh,72px);width:auto;margin-bottom:38px}
+  #intro .kicker{font-size:9px;letter-spacing:.5em;text-transform:uppercase;color:var(--teal);margin-bottom:22px}
+  #intro h1{font-weight:900;font-size:clamp(40px,8.6vw,110px);line-height:.94;
+    letter-spacing:-.04em;text-transform:uppercase}
+  #intro h1 span{display:block}
+  #intro .tag{margin-top:22px;font-size:12px;font-weight:300;letter-spacing:.24em;
+    text-transform:uppercase;color:var(--bone-dim)}
+  #intro .modes{margin-top:34px;display:flex;gap:14px;flex-wrap:wrap;justify-content:center}
+  #intro .modes div{border:1px solid var(--hairline);border-radius:999px;
+    padding:10px 22px;font-size:9px;letter-spacing:.28em;text-transform:uppercase;color:var(--bone-dim)}
+  #intro .modes b{color:var(--bone);font-weight:600}
+  #begin{
+    margin-top:40px;appearance:none;background:var(--teal);border:1px solid var(--teal);
+    border-radius:999px;color:#0c0f0e;font-family:inherit;font-size:10px;font-weight:700;
+    letter-spacing:.34em;text-transform:uppercase;padding:18px 46px 18px 52px;cursor:pointer;
+    transition:all .45s var(--ease-ui);
+  }
+  #begin:hover{background:transparent;color:var(--teal)}
+  #intro .hint{position:absolute;bottom:30px;font-size:8px;letter-spacing:.24em;
+    text-transform:uppercase;color:rgba(242,245,241,.32)}
+  .i-anim{opacity:0;animation:capin 1.1s var(--ease-ui) forwards}
+  .d1{animation-delay:.1s}.d2{animation-delay:.3s}.d3{animation-delay:.5s}
+  .d4{animation-delay:.75s}.d5{animation-delay:1s}
+
+  /* end card */
+  #endcard{position:fixed;inset:0;z-index:40;background:rgba(12,15,14,.85);
+    backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);
+    display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;
+    opacity:0;visibility:hidden;transition:opacity .9s var(--ease-fade),visibility 0s linear .9s;padding:24px}
+  #endcard.show{opacity:1;visibility:visible;transition:opacity .9s var(--ease-fade)}
+  #endcard img{height:40px;width:auto;margin-bottom:30px}
+  #endcard h2{font-weight:900;font-size:clamp(28px,4.4vw,52px);letter-spacing:-.03em;text-transform:uppercase}
+  #endcard p{margin-top:14px;font-size:10px;letter-spacing:.28em;text-transform:uppercase;color:var(--bone-dim);line-height:2.2}
+  #replay{margin-top:36px;appearance:none;background:transparent;border:1px solid var(--hairline);
+    border-radius:999px;color:var(--bone);font-family:inherit;font-size:9px;font-weight:600;
+    letter-spacing:.34em;text-transform:uppercase;padding:15px 40px;cursor:pointer;
+    transition:all .4s var(--ease-ui)}
+  #replay:hover{border-color:var(--teal);color:var(--teal)}
+
+  @media (max-width:860px){
+    #caption{max-width:76vw}
+    #counter{display:none}
+    .coords{display:none}
+    .switch button{padding:10px 13px;letter-spacing:.14em}
+    footer{flex-wrap:wrap;justify-content:center}
+    #segments{order:3;flex-basis:100%;max-width:none}
+  }
+</style>
+</head>
+<body class="film hidden-chrome">
+
+<div id="stage"></div>
+<div class="veil"></div>
+<div class="vignette"></div>
+
+<div class="hud">
+  <div class="reticle"><i></i></div>
+  <div class="compass">
+    <div class="tape" id="tape"></div>
+    <div class="needle"></div>
+  </div>
+  <div class="coords">LOOK <b id="coordX">+000.0°</b> · <b id="coordY">+000.0°</b></div>
+  <div class="look-hint" id="lookHint">Drag to look around</div>
+</div>
+<div class="badge360" id="badge360">360°</div>
+
+<header class="chrome">
+  <div class="brand">
+    <img src="assets/fjall-logo.png" alt="FJÄLL GROUP">
+    <span class="div"></span>
+    <span class="sub">Drop Pod Villas</span>
+  </div>
+  <div class="meta">
+    Interactive Concept Presentation<br>
+    <b>Two Material Worlds</b> · One Architecture
+  </div>
+</header>
+
+<div id="caption" class="chrome">
+  <div class="cap-anim" id="capInner">
+    <div class="no" id="capNo">01 — 15</div>
+    <div class="title" id="capTitle">Beachfront Placement</div>
+    <div class="desc" id="capDesc"></div>
+  </div>
+</div>
+
+<div id="counter" class="chrome"><span class="cur" id="counterCur">01</span>/ 15</div>
+
+<footer class="chrome">
+  <div class="transport">
+    <button class="tbtn" id="btnPrev" aria-label="Previous scene">
+      <svg viewBox="0 0 24 24"><path d="M15 5l-7 7 7 7"/></svg>
+    </button>
+    <button class="tbtn" id="btnPlay" aria-label="Play or pause">
+      <svg viewBox="0 0 24 24" id="icoPause"><path class="fill" d="M8 5h2.6v14H8zM13.4 5H16v14h-2.6z"/></svg>
+      <svg viewBox="0 0 24 24" id="icoPlay" style="display:none"><path class="fill" d="M8 5l11 7-11 7z"/></svg>
+    </button>
+    <button class="tbtn" id="btnNext" aria-label="Next scene">
+      <svg viewBox="0 0 24 24"><path d="M9 5l7 7-7 7"/></svg>
+    </button>
+    <button class="tbtn" id="btnFull" aria-label="Fullscreen">
+      <svg viewBox="0 0 24 24"><path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/></svg>
+    </button>
+    <button class="tbtn" id="btnMotion" aria-label="Enable motion look" style="display:none">
+      <svg viewBox="0 0 24 24"><rect x="7" y="2.5" width="10" height="19" rx="2.5"/><path d="M11 18.5h2"/></svg>
+    </button>
+  </div>
+
+  <div id="segments"></div>
+
+  <div class="ctrl-col">
+    <div class="switch-label">View — <em id="modeName">Film</em></div>
+    <div class="switch mode" id="modeSwitch">
+      <button id="mdFilm" class="on">Film</button>
+      <button id="mdExplore">Explore VR</button>
+    </div>
+    <div class="switch-label">Material World — <em id="styleName">Modern Mediterranean</em></div>
+    <div class="switch" id="styleSwitch">
+      <button id="swMed" class="on">Mediterranean</button>
+      <button id="swWo">Warm Organic</button>
+    </div>
+  </div>
+</footer>
+
+<div id="endcard">
+  <img src="assets/fjall-logo.png" alt="FJÄLL GROUP">
+  <h2>Ready to Build.</h2>
+  <p>Drop Pod Villas · Rapid deployment. Uncompromising luxury.<br>
+  Commercial Office Jakarta · Bali HQ · www.fjällgroup.com</p>
+  <button id="replay">Replay the Experience</button>
+</div>
+
+<div id="intro">
+  <video class="bg" src="assets/sumba-resort.mp4" poster="assets/sumba-resort.jpg" muted loop autoplay playsinline></video>
+  <div class="scrim"></div>
+  <img class="logo i-anim d1" src="assets/fjall-logo-large.png" alt="FJÄLL GROUP">
+  <div class="kicker i-anim d2">Interactive Concept Presentation</div>
+  <h1>
+    <span class="i-anim d2">Drop Pod</span>
+    <span class="i-anim d3">Villas</span>
+  </h1>
+  <div class="tag i-anim d4">Rapid deployment. Uncompromising luxury.</div>
+  <div class="modes i-anim d4">
+    <div><b>Film</b> — cinematic walkthrough</div>
+    <div><b>Explore VR</b> — drag to look around</div>
+    <div><b>360° Suite</b> — full panoramic view</div>
+    <div><b>Two Worlds</b> — Mediterranean ⇄ Warm Organic</div>
+  </div>
+  <button id="begin" class="i-anim d5">Enter the Experience</button>
+  <div class="hint i-anim d5">Space — play / pause · ← → — scenes · V — film / explore · M / W — material world · F — fullscreen</div>
+</div>
+
+<script>
+const SCENES = [
+  {key:"sumba",   title:"The Sumba Masterplan", dur:12000, video:"assets/sumba-resort.mp4", poster:"assets/sumba-resort.jpg",
+   desc:"One hundred Drop Pods along the Waingapu shoreline, East Sumba — phase one of a five-hundred-unit programme."},
+  {key:"beach",   title:"Beachfront Placement", dur:12000, video:"assets/beachfront.mp4", poster:"assets/pod-hero.jpg",
+   desc:"The catalogue P-Grade shell, placed where land meets sea — curled composite form, glazed front facing the surf."},
+  {key:"hero",    title:"Life on the Veranda",  dur:7000, single:"assets/pod-hero.jpg",
+   desc:"Human scale against the sculpted shell — the integrated veranda and cascading stair, twenty steps from the water."},
+  {key:"exterior",title:"The Approach",         dur:12000, video:"assets/exterior-pods.mp4", poster:"assets/arrival-med.jpg",
+   desc:"A sculpted monolithic shell meets the landscape — the arched glass facade draws daylight deep into the pod."},
+  {key:"entry",   title:"Veranda to Entrance",  dur:12000, video:"assets/walkthrough-entry.mp4", poster:"assets/lounge-med.jpg",
+   desc:"Step from the veranda through the sliding glass wall — inside and out become one volume."},
+  {key:"reveal",  title:"The Suite Reveal",     dur:12000, video:"assets/walkthrough-suite.mp4", poster:"assets/sleeping-med.jpg",
+   desc:"One continuous glide through the open suite — kitchen, living wall and sleeping alcove in a single take."},
+  {key:"pano",    title:"Inside the Pod",       dur:15000, pano:true,
+   desc:"A full 360° panorama from the heart of the suite — drag to look in every direction."},
+  {key:"arrival", title:"Facade",               dur:7000, desc:"Pre-engineered rings, wrapped in a continuous elastomeric veil — built in weeks, not months."},
+  {key:"lounge",  title:"Terrace Lounge",       dur:7000, desc:"A quiet threshold between inside and out, framed by the pod's signature circular aperture."},
+  {key:"dining",  title:"Alfresco Dining",      dur:7000, desc:"Morning coffee or evening wine — the veranda extends the living space into the open air."},
+  {key:"living",  title:"The Living Wall",      dur:7000, desc:"One continuous surface carries media, wardrobe and storage — the functional heart of the pod."},
+  {key:"suite",   title:"The Open Suite",       dur:7000, desc:"Sleeping, cooking and living flow as one volume beneath the curved shell."},
+  {key:"kitchen", title:"The Kitchen",          dur:7000, desc:"A full working kitchen, compacted into a single elegant run of bamboo cabinetry."},
+  {key:"culinary",title:"Culinary Detail",      dur:7000, desc:"Tactile surfaces and warm task lighting — every touchpoint considered."},
+  {key:"dressing",title:"Dressing Gallery",     dur:7000, desc:"A calm corridor of wardrobes connects the wet cell to the suite."},
+  {key:"sleeping",title:"The Sleeping Suite",   dur:7000, desc:"The bed anchors the pod — a monolithic headboard wall, soft textiles, filtered light."},
+  {key:"morning", title:"Morning Light",        dur:7000, desc:"Sheer curtains temper the sun; the suite wakes with the site."},
+];
+const KB = ["kb-a","kb-b","kb-c"];
+const LOOK_SCALE = 1.32;
+
+const stage = document.getElementById("stage");
+const segWrap = document.getElementById("segments");
+const capInner = document.getElementById("capInner");
+const capNo = document.getElementById("capNo");
+const capTitle = document.getElementById("capTitle");
+const capDesc = document.getElementById("capDesc");
+const counterCur = document.getElementById("counterCur");
+const styleName = document.getElementById("styleName");
+const modeName = document.getElementById("modeName");
+const icoPlay = document.getElementById("icoPlay");
+const icoPause = document.getElementById("icoPause");
+const endcard = document.getElementById("endcard");
+const tape = document.getElementById("tape");
+const coordX = document.getElementById("coordX");
+const coordY = document.getElementById("coordY");
+const lookHint = document.getElementById("lookHint");
+const badge360 = document.getElementById("badge360");
+
+let cur = 0, style = "med", mode = "film", playing = false, elapsed = 0, raf = null, lastTs = 0;
+let started = false;
+
+/* ---------- build scene layers ---------- */
+SCENES.forEach((s,i)=>{
+  const sc = document.createElement("div");
+  sc.className = "scene"; sc.style.setProperty("--dur", s.dur+"ms");
+  const look = document.createElement("div"); look.className = "look";
+  if (s.pano){
+    const c = document.createElement("canvas");
+    c.className = "pano"; c.dataset.style = "both";
+    look.appendChild(c);
+  } else if (s.video){
+    const v = document.createElement("video");
+    v.src = s.video; v.muted = true; v.loop = true; v.playsInline = true;
+    v.setAttribute("playsinline",""); v.preload = "auto";
+    if (s.poster) v.poster = s.poster;
+    v.dataset.style = "both";
+    look.appendChild(v);
+  } else if (s.single){
+    const img = document.createElement("img");
+    img.src = s.single; img.dataset.style = "both";
+    img.alt = s.title; img.draggable = false;
+    look.appendChild(img);
+  } else {
+    for (const st of ["med","wo"]){
+      const img = document.createElement("img");
+      img.src = `assets/${s.key}-${st}.jpg`;
+      img.dataset.style = st;
+      img.alt = `${s.title} — ${st==="med"?"Modern Mediterranean":"Warm Organic"}`;
+      img.draggable = false;
+      look.appendChild(img);
+    }
+  }
+  sc.appendChild(look);
+  stage.appendChild(sc);
+
+  const seg = document.createElement("button");
+  seg.className = "seg"; seg.setAttribute("aria-label", s.title);
+  seg.innerHTML = `<span class="fill"></span><span class="tip">${String(i+1).padStart(2,"0")} · ${s.title}</span>`;
+  seg.addEventListener("click", ()=> goTo(i));
+  segWrap.appendChild(seg);
+});
+const sceneEls = [...stage.children];
+const segEls = [...segWrap.children];
+const PANO_INDEX = SCENES.findIndex(s=>s.pano);
+
+/* compass tape */
+{
+  const cards = {0:"N",45:"NE",90:"E",135:"SE",180:"S",225:"SW",270:"W",315:"NW"};
+  let html = "";
+  for (let d=-180; d<=540; d+=15){
+    const norm = ((d%360)+360)%360;
+    html += `<span class="${cards[norm]!==undefined?'card':''}">${cards[norm]!==undefined?cards[norm]:norm+"°"}</span>`;
+  }
+  tape.innerHTML = html;
+}
+function setCompass(deg){
+  tape.style.transform = `translateX(${-(deg+180)*40/15 + 20}px)`;
+}
+
+function mediaOf(i){ return [...sceneEls[i].querySelectorAll("img,video,canvas")]; }
+
+/* =========================================================
+   Minimal WebGL equirectangular 360 viewer (no dependencies)
+   ========================================================= */
+const pano = {
+  gl:null, canvas:null, prog:null, tex:{}, yaw:0, pitch:0,
+  tYaw:0, tPitch:0, vel:0, running:false, dragging:false, lx:0, ly:0,
+  lastMove:0, ready:{}
+};
+function mat4Perspective(fov,aspect,near,far){
+  const f = 1/Math.tan(fov/2), nf = 1/(near-far);
+  return [f/aspect,0,0,0, 0,f,0,0, 0,0,(far+near)*nf,-1, 0,0,2*far*near*nf,0];
+}
+function mat4Mul(a,b){
+  const o = new Array(16).fill(0);
+  for (let r=0;r<4;r++) for (let c=0;c<4;c++)
+    for (let k=0;k<4;k++) o[c*4+r] += a[k*4+r]*b[c*4+k];
+  return o;
+}
+function mat4RotY(d){ const c=Math.cos(d),s=Math.sin(d); return [c,0,-s,0, 0,1,0,0, s,0,c,0, 0,0,0,1]; }
+function mat4RotX(d){ const c=Math.cos(d),s=Math.sin(d); return [1,0,0,0, 0,c,s,0, 0,-s,c,0, 0,0,0,1]; }
+
+function initPano(){
+  if (pano.gl) return;
+  const canvas = sceneEls[PANO_INDEX].querySelector("canvas");
+  pano.canvas = canvas;
+  const gl = canvas.getContext("webgl",{antialias:true});
+  if (!gl) return;
+  pano.gl = gl;
+  const vs = gl.createShader(gl.VERTEX_SHADER);
+  gl.shaderSource(vs,"attribute vec3 p;attribute vec2 uv;uniform mat4 m;varying vec2 v;void main(){v=uv;gl_Position=m*vec4(p,1.);}");
+  gl.compileShader(vs);
+  const fs = gl.createShader(gl.FRAGMENT_SHADER);
+  gl.shaderSource(fs,"precision mediump float;varying vec2 v;uniform sampler2D t;void main(){gl_FragColor=texture2D(t,v);}");
+  gl.compileShader(fs);
+  const prog = gl.createProgram();
+  gl.attachShader(prog,vs); gl.attachShader(prog,fs); gl.linkProgram(prog); gl.useProgram(prog);
+  pano.prog = prog;
+  // sphere (rendered from inside)
+  const W=64,H=40,pos=[],uv=[],idx=[];
+  for (let y=0;y<=H;y++){
+    const th = y/H*Math.PI;
+    for (let x=0;x<=W;x++){
+      const ph = x/W*2*Math.PI;
+      pos.push(-Math.cos(ph)*Math.sin(th), Math.cos(th), Math.sin(ph)*Math.sin(th));
+      uv.push(x/W, 1-y/H);
+    }
+  }
+  for (let y=0;y<H;y++) for (let x=0;x<W;x++){
+    const a=y*(W+1)+x, b=a+W+1;
+    idx.push(a,b,a+1, b,b+1,a+1);
+  }
+  const vb = gl.createBuffer(); gl.bindBuffer(gl.ARRAY_BUFFER,vb);
+  gl.bufferData(gl.ARRAY_BUFFER,new Float32Array(pos),gl.STATIC_DRAW);
+  const pl = gl.getAttribLocation(prog,"p");
+  gl.enableVertexAttribArray(pl); gl.vertexAttribPointer(pl,3,gl.FLOAT,false,0,0);
+  const ub = gl.createBuffer(); gl.bindBuffer(gl.ARRAY_BUFFER,ub);
+  gl.bufferData(gl.ARRAY_BUFFER,new Float32Array(uv),gl.STATIC_DRAW);
+  const ul = gl.getAttribLocation(prog,"uv");
+  gl.enableVertexAttribArray(ul); gl.vertexAttribPointer(ul,2,gl.FLOAT,false,0,0);
+  const ib = gl.createBuffer(); gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER,ib);
+  gl.bufferData(gl.ELEMENT_ARRAY_BUFFER,new Uint16Array(idx),gl.STATIC_DRAW);
+  pano.count = idx.length;
+  gl.enable(gl.CULL_FACE); gl.cullFace(gl.FRONT);
+  loadPanoTex("med"); loadPanoTex("wo");
+
+  canvas.addEventListener("pointerdown", e=>{
+    pano.dragging = true; pano.lx=e.clientX; pano.ly=e.clientY; pano.vel=0;
+    pano.lastMove = performance.now();
+    canvas.setPointerCapture(e.pointerId); e.stopPropagation();
+  });
+  canvas.addEventListener("pointermove", e=>{
+    if (!pano.dragging) return;
+    const dx = e.clientX-pano.lx, dy = e.clientY-pano.ly;
+    pano.lx=e.clientX; pano.ly=e.clientY;
+    pano.tYaw   -= dx*0.12;
+    pano.tPitch  = Math.max(-85,Math.min(85, pano.tPitch + dy*0.10));
+    pano.vel = -dx*0.12;
+    pano.lastMove = performance.now();
+    lookHint.style.display = "none";
+    e.stopPropagation();
+  });
+  ["pointerup","pointercancel"].forEach(ev=>canvas.addEventListener(ev, e=>{
+    pano.dragging=false; pano.lastMove=performance.now(); e.stopPropagation();
+  }));
+}
+function loadPanoTex(st){
+  const gl = pano.gl;
+  const img = new Image();
+  img.onload = ()=>{
+    const t = gl.createTexture();
+    gl.bindTexture(gl.TEXTURE_2D,t);
+    gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, true);
+    gl.texImage2D(gl.TEXTURE_2D,0,gl.RGB,gl.RGB,gl.UNSIGNED_BYTE,img);
+    gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_MIN_FILTER,gl.LINEAR_MIPMAP_LINEAR);
+    gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_MAG_FILTER,gl.LINEAR);
+    gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_WRAP_S,gl.CLAMP_TO_EDGE);
+    gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_WRAP_T,gl.CLAMP_TO_EDGE);
+    gl.generateMipmap(gl.TEXTURE_2D);
+    pano.tex[st] = t; pano.ready[st] = true;
+    if (st===style) pano.canvas.style.opacity = 1;
+  };
+  img.src = `assets/pano-${st}.jpg`;
+}
+function panoFrame(){
+  if (!pano.running) return;
+  const gl = pano.gl, canvas = pano.canvas;
+  const dpr = Math.min(2, devicePixelRatio||1);
+  const w = canvas.clientWidth*dpr|0, h = canvas.clientHeight*dpr|0;
+  if (canvas.width!==w||canvas.height!==h){ canvas.width=w; canvas.height=h; gl.viewport(0,0,w,h); }
+  const now = performance.now();
+  // auto-rotate: in film mode always; in explore after idle
+  if (!pano.dragging){
+    if (Math.abs(pano.vel)>0.002){ pano.tYaw += pano.vel; pano.vel*=0.95; }
+    else if (mode==="film" || now-pano.lastMove>3500){ pano.tYaw += 0.045; }
+  }
+  pano.yaw   += (pano.tYaw-pano.yaw)*0.09;
+  pano.pitch += (pano.tPitch-pano.pitch)*0.09;
+  const proj = mat4Perspective(1.22, w/h, 0.1, 10);
+  const view = mat4Mul(mat4RotX(pano.pitch*Math.PI/180), mat4RotY(pano.yaw*Math.PI/180));
+  gl.uniformMatrix4fv(gl.getUniformLocation(pano.prog,"m"), false, new Float32Array(mat4Mul(proj,view)));
+  if (pano.tex[style]) gl.bindTexture(gl.TEXTURE_2D, pano.tex[style]);
+  gl.drawElements(gl.TRIANGLES, pano.count, gl.UNSIGNED_SHORT, 0);
+  requestAnimationFrame(panoFrame);
+}
+function panoStart(){ if (!pano.running){ pano.running = true; requestAnimationFrame(panoFrame); } }
+function panoStop(){ pano.running = false; }
+
+/* ---------- look (pan/tilt for stills & video) ---------- */
+const look = {x:0,y:0,tx:0,ty:0,vx:0,vy:0,dragging:false,lx:0,ly:0,lastMove:0,gyro:false,gx:0,gy:0};
+function maxX(){ return (LOOK_SCALE-1)/2 * innerWidth; }
+function maxY(){ return (LOOK_SCALE-1)/2 * innerHeight; }
+function resetLook(){ look.x=look.y=look.tx=look.ty=look.vx=look.vy=0; }
+
+function lookLoop(t){
+  if (mode!=="explore") return;
+  if (SCENES[cur].pano){
+    // HUD driven by the 360 viewer's true heading
+    const deg = ((pano.yaw%360)+360)%360;
+    setCompass(deg);
+    coordX.textContent = deg.toFixed(1).padStart(5,"0")+"°";
+    coordY.textContent = (pano.pitch>=0?"+":"−")+Math.abs(pano.pitch).toFixed(1).padStart(4,"0")+"°";
+    requestAnimationFrame(lookLoop);
+    return;
+  }
+  const mX=maxX(), mY=maxY();
+  if (!look.dragging && !look.gyro && t-look.lastMove>3000){
+    look.tx = mX*0.45*Math.sin(t*0.00035);
+    look.ty = mY*0.30*Math.sin(t*0.00023+1.7);
+  }
+  if (look.gyro){
+    look.tx = Math.max(-mX,Math.min(mX, -look.gx/40*mX));
+    look.ty = Math.max(-mY,Math.min(mY,  look.gy/35*mY));
+  }
+  if (!look.dragging && (Math.abs(look.vx)>.05||Math.abs(look.vy)>.05)){
+    look.tx = Math.max(-mX,Math.min(mX, look.tx+look.vx));
+    look.ty = Math.max(-mY,Math.min(mY, look.ty+look.vy));
+    look.vx*=0.93; look.vy*=0.93;
+  }
+  look.x += (look.tx-look.x)*0.085;
+  look.y += (look.ty-look.y)*0.085;
+  sceneEls[cur].querySelector(".look").style.transform =
+    `translate(${look.x}px,${look.y}px) scale(${LOOK_SCALE})`;
+  const hx = -look.x/mX*60, hy = -look.y/mY*28;
+  coordX.textContent = (hx>=0?"+":"−")+Math.abs(hx).toFixed(1).padStart(5,"0")+"°";
+  coordY.textContent = (hy>=0?"+":"−")+Math.abs(hy).toFixed(1).padStart(5,"0")+"°";
+  setCompass(((hx%360)+360)%360);
+  requestAnimationFrame(lookLoop);
+}
+
+stage.addEventListener("pointerdown", e=>{
+  if (mode!=="explore" || SCENES[cur].pano) return;
+  look.dragging = true; look.lx=e.clientX; look.ly=e.clientY;
+  look.vx=look.vy=0; look.lastMove=performance.now();
+  stage.classList.add("dragging"); stage.setPointerCapture(e.pointerId);
+});
+stage.addEventListener("pointermove", e=>{
+  if (!look.dragging) return;
+  const dx = e.clientX-look.lx, dy = e.clientY-look.ly;
+  look.lx=e.clientX; look.ly=e.clientY;
+  look.tx = Math.max(-maxX(),Math.min(maxX(), look.tx+dx));
+  look.ty = Math.max(-maxY(),Math.min(maxY(), look.ty+dy));
+  look.vx = dx; look.vy = dy;
+  look.lastMove = performance.now();
+  lookHint.style.display = "none";
+});
+["pointerup","pointercancel"].forEach(ev=>stage.addEventListener(ev, ()=>{
+  look.dragging=false; stage.classList.remove("dragging"); look.lastMove=performance.now();
+}));
+
+/* device orientation */
+const btnMotion = document.getElementById("btnMotion");
+if (window.DeviceOrientationEvent && "ontouchstart" in window) btnMotion.style.display = "grid";
+btnMotion.addEventListener("click", async ()=>{
+  try{
+    if (typeof DeviceOrientationEvent.requestPermission === "function"){
+      const r = await DeviceOrientationEvent.requestPermission();
+      if (r!=="granted") return;
+    }
+    look.gyro = !look.gyro;
+    btnMotion.style.borderColor = look.gyro ? "var(--teal)" : "";
+    btnMotion.style.color = look.gyro ? "var(--teal)" : "";
+  }catch(e){}
+});
+window.addEventListener("deviceorientation", e=>{
+  if (!look.gyro) return;
+  if (SCENES[cur] && SCENES[cur].pano){
+    if (e.gamma!=null) pano.tYaw += e.gamma*0.02;
+    if (e.beta!=null) pano.tPitch = Math.max(-85,Math.min(85,(e.beta-45)*1.2));
+    return;
+  }
+  if (e.gamma!=null) look.gx = e.gamma;
+  if (e.beta!=null)  look.gy = (e.beta-45);
+});
+
+/* ---------- scene display ---------- */
+function show(i, {reset=true}={}){
+  sceneEls.forEach((el,idx)=>{
+    el.classList.toggle("active", idx===i);
+    if (idx!==i){
+      el.querySelector(".look").style.transform = "";
+      const v = el.querySelector("video"); if (v) v.pause();
+    }
+  });
+  if (SCENES[i].pano){
+    initPano();
+    pano.canvas.style.opacity = pano.ready[style] ? 1 : 0;
+    pano.tYaw = pano.yaw = 0; pano.tPitch = pano.pitch = 0;
+    panoStart();
+    badge360.classList.add("show");
+  } else {
+    panoStop();
+    badge360.classList.remove("show");
+  }
+  mediaOf(i).forEach(m=>{
+    const on = m.dataset.style==="both" || m.dataset.style===style;
+    m.classList.toggle("show", on);
+    m.classList.remove("kb-a","kb-b","kb-c");
+    if (on && m.tagName==="IMG"){ void m.offsetWidth; m.classList.add(KB[i%3]); }
+    if (on && m.tagName==="VIDEO"){ m.currentTime = 0; m.play().catch(()=>{}); }
+    if (on && m.tagName==="CANVAS"){ m.classList.add("show"); }
+  });
+  resetLook();
+  segEls.forEach((s,idx)=>{
+    s.classList.toggle("done", idx<i);
+    s.querySelector(".fill").style.width = idx<i ? "100%" : "0";
+  });
+  capNo.textContent = `${String(i+1).padStart(2,"0")} — ${String(SCENES.length).padStart(2,"0")}`;
+  capTitle.textContent = SCENES[i].title;
+  capDesc.textContent = SCENES[i].desc;
+  counterCur.textContent = String(i+1).padStart(2,"0");
+  capInner.classList.remove("cap-anim"); void capInner.offsetWidth; capInner.classList.add("cap-anim");
+  if (reset){ elapsed = 0; }
+}
+
+function goTo(i){
+  endcard.classList.remove("show");
+  cur = (i+SCENES.length)%SCENES.length;
+  show(cur);
+}
+function next(){ (cur===SCENES.length-1) ? finish() : goTo(cur+1); }
+function prev(){ goTo(cur-1); }
+function finish(){
+  pause();
+  segEls.forEach(s=>{ s.classList.add("done"); s.querySelector(".fill").style.width="100%"; });
+  endcard.classList.add("show");
+  document.body.classList.remove("hidden-chrome");
+}
+
+/* film timer */
+function loop(ts){
+  if (!playing) return;
+  if (!lastTs) lastTs = ts;
+  elapsed += ts-lastTs; lastTs = ts;
+  const p = Math.min(1, elapsed/SCENES[cur].dur);
+  segEls[cur].querySelector(".fill").style.width = (p*100)+"%";
+  if (p>=1){
+    lastTs = 0; next();
+    if (playing) raf = requestAnimationFrame(loop);
+    return;
+  }
+  raf = requestAnimationFrame(loop);
+}
+function play(){
+  if (playing) return;
+  playing = true; lastTs = 0;
+  icoPlay.style.display="none"; icoPause.style.display="block";
+  raf = requestAnimationFrame(loop);
+  wake();
+}
+function pause(){
+  playing = false; cancelAnimationFrame(raf);
+  icoPlay.style.display="block"; icoPause.style.display="none";
+}
+
+/* ---------- modes ---------- */
+function setMode(m){
+  if (m===mode) return;
+  mode = m;
+  document.body.classList.toggle("film", m==="film");
+  document.body.classList.toggle("explore", m==="explore");
+  document.getElementById("mdFilm").classList.toggle("on", m==="film");
+  document.getElementById("mdExplore").classList.toggle("on", m==="explore");
+  modeName.textContent = m==="film" ? "Film" : "Explore VR";
+  lookHint.style.display = "";
+  if (m==="explore"){
+    pause();
+    document.body.classList.remove("hidden-chrome");
+    resetLook();
+    requestAnimationFrame(lookLoop);
+  } else {
+    sceneEls[cur].querySelector(".look").style.transform = "";
+    show(cur);
+    play();
+  }
+}
+document.getElementById("mdFilm").addEventListener("click", ()=>setMode("film"));
+document.getElementById("mdExplore").addEventListener("click", ()=>setMode("explore"));
+
+/* ---------- style switch ---------- */
+function setStyle(st){
+  if (st===style) return;
+  style = st;
+  document.getElementById("swMed").classList.toggle("on", st==="med");
+  document.getElementById("swWo").classList.toggle("on", st==="wo");
+  styleName.textContent = st==="med" ? "Modern Mediterranean" : "Warm Organic";
+  if (SCENES[cur].pano){
+    pano.canvas.style.opacity = pano.ready[st] ? 1 : 0;
+  } else {
+    mediaOf(cur).forEach(m=>{
+      const on = m.dataset.style==="both" || m.dataset.style===st;
+      m.classList.remove("kb-a","kb-b","kb-c");
+      if (on && m.tagName==="IMG"){ void m.offsetWidth; m.classList.add(KB[cur%3]); }
+      m.classList.toggle("show", on);
+    });
+    [cur+1,cur+2].forEach(k=>{
+      if (k<SCENES.length && !SCENES[k].video && !SCENES[k].pano){
+        const im=new Image(); im.src=`assets/${SCENES[k].key}-${st}.jpg`;
+      }
+    });
+  }
+}
+document.getElementById("swMed").addEventListener("click", ()=>setStyle("med"));
+document.getElementById("swWo").addEventListener("click", ()=>setStyle("wo"));
+
+/* ---------- transport ---------- */
+document.getElementById("btnPlay").addEventListener("click", ()=> playing?pause():play());
+document.getElementById("btnNext").addEventListener("click", ()=>{ endcard.classList.remove("show"); goTo(cur+1>SCENES.length-1?0:cur+1); });
+document.getElementById("btnPrev").addEventListener("click", prev);
+document.getElementById("btnFull").addEventListener("click", ()=>{
+  if (document.fullscreenElement) document.exitFullscreen();
+  else document.documentElement.requestFullscreen().catch(()=>{});
+});
+
+document.addEventListener("keydown", e=>{
+  if (!started){ if (e.code==="Space"||e.code==="Enter"){ e.preventDefault(); start(); } return; }
+  switch(e.code){
+    case "Space": e.preventDefault(); if (mode==="film"){ playing?pause():play(); } break;
+    case "ArrowRight": goTo(cur+1>SCENES.length-1?0:cur+1); break;
+    case "ArrowLeft": prev(); break;
+    case "KeyV": setMode(mode==="film"?"explore":"film"); break;
+    case "KeyM": setStyle("med"); break;
+    case "KeyW": setStyle("wo"); break;
+    case "KeyF": document.getElementById("btnFull").click(); break;
+  }
+});
+
+/* idle chrome hide (film mode only) */
+let idleTimer=null;
+function wake(){
+  document.body.classList.remove("hidden-chrome");
+  clearTimeout(idleTimer);
+  idleTimer=setTimeout(()=>{ if (playing && mode==="film") document.body.classList.add("hidden-chrome"); }, 3200);
+}
+["mousemove","touchstart","keydown"].forEach(ev=>document.addEventListener(ev,wake,{passive:true}));
+
+/* ---------- start ---------- */
+function start(){
+  started = true;
+  document.getElementById("intro").classList.add("gone");
+  document.body.classList.remove("hidden-chrome");
+  const iv = document.querySelector("#intro video.bg"); if (iv) iv.pause();
+  show(0);
+  play();
+}
+document.getElementById("begin").addEventListener("click", start);
+document.getElementById("replay").addEventListener("click", ()=>{
+  endcard.classList.remove("show"); goTo(0);
+  if (mode==="film") play();
+});
+
+/* preload current-style stills during intro */
+window.addEventListener("load", ()=>{
+  SCENES.forEach(s=>{ if (!s.video && !s.pano && !s.single){ const im=new Image(); im.src=`assets/${s.key}-med.jpg`; } });
+});
+</script>
+</body>
+</html>
